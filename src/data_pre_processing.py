@@ -9,7 +9,43 @@ import string
 import numpy as np
 import re
 from collections import Counter
+import re
+import string
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from collections import Counter
+
+# Download necessary NLTK data (do this once)
 nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('punkt')
+def clean_text(text):
+    # Remove HTML tags
+    cleaned_text = re.sub(r'<.*?>', '', text)
+    
+    # Convert text to lowercase
+    cleaned_text = cleaned_text.lower()
+
+    # Remove punctuation
+    cleaned_text = cleaned_text.translate(str.maketrans('', '', string.punctuation))
+
+    # Tokenization
+    tokens = word_tokenize(cleaned_text)
+
+    # Remove stopwords
+    stop_words = set(stopwords.words('english'))
+    filtered_tokens = [word for word in tokens if word not in stop_words]
+
+    # Lemmatization
+    lemmatizer = WordNetLemmatizer()
+    lemmatized_tokens = [lemmatizer.lemmatize(word) for word in filtered_tokens]
+
+    # Join the cleaned tokens back into a string
+    cleaned_text = ' '.join(lemmatized_tokens)
+
+    return cleaned_text
 
 def extract_code(text):
     # Extracting code enclosed in <code> tags
@@ -39,14 +75,6 @@ def analyze_text_quality(text):
         "avg_word_length": avg_word_length,
         "complex_words": complex_words
     }
-
-def clean_text(text):
-    # Clean text
-    cleaned_text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
-    cleaned_text = cleaned_text.lower().translate(str.maketrans('', '', string.punctuation))
-
-    return cleaned_text
-
 
 def process_code(code):
     # Basic metrics
@@ -115,19 +143,4 @@ def preprocess_data(df):
     print("processed data", processed_data[:5])
     # Convert the list of dictionaries to a DataFrame
     return pd.DataFrame(processed_data)
-
-
-def process_text(text):
-    text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
-    return text.lower().translate(str.maketrans('', '', string.punctuation))
-
-
-def vectorize_text(data, vectorizer):
-    return vectorizer.fit_transform(data).toarray()
-
-
-def encode_tags(data, encoder):
-    reshaped_data = data.apply(lambda x: ','.join(x)).values.reshape(-1, 1)
-    encoded_data = encoder.fit_transform(reshaped_data)
-    return pd.DataFrame(encoded_data.toarray(), columns=encoder.get_feature_names_out())
 

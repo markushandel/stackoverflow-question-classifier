@@ -20,6 +20,7 @@ from src import preprocess_data, filter_dataframe_on_languages, filter_dataframe
 from feature_selectors import UnivariateFeatureSelector, PSOFeatureSelector
 from text_processors import TfidfProcessor, BowDataProcessor, Word2VecDataProcessor, BertDataProcessor
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import VarianceThreshold
 
 def convert_to_binary(df, label_column, specified_class):
     """
@@ -98,6 +99,7 @@ def get_data():
     # If you want to see the counts of how many times each text is duplicated
     label_encoder = LabelEncoder()
 
+
     y = label_encoder.fit_transform(df['label'])
     X = df.drop('label', axis=1)
     return X, y
@@ -110,11 +112,30 @@ def data_processor(X, y):
     # data_processor = Word2VecDataProcessor()
     # data_processor = BertDataProcessor()
 
-
+    print("Fitting data processor...")
+    print(X_train.shape)
+    
     data_processor.fit(X_train)
     X_train = data_processor.transform(X_train)
     X_test = data_processor.transform(X_test)
 
+    # Create a VarianceThreshold selector with a threshold of 0 (to find constant features)
+    numeric_df = pd.DataFrame(X_train).select_dtypes(include=[np.number])
+
+    selector = VarianceThreshold(threshold=0)
+
+    # Fit the selector to your data
+    selector.fit(numeric_df)
+
+    # Get the indices of constant features
+    constant_features_indices = [i for i, var in enumerate(selector.variances_) if var == 0]
+
+    # Get the names of constant features
+    constant_features_names = [numeric_df.columns[i] for i in constant_features_indices]
+
+    # Print constant feature names
+    print("Constant numeric features:")
+    print(constant_features_names)
     # return X_train, X_test, y_train, y_test
 
     # Initialize your feature selector
