@@ -38,10 +38,33 @@ def convert_to_binary(df, label_column, specified_class):
 
     return df
 
+def find_common_strings(df, column_name='body'):
+    if column_name not in df.columns:
+        print(f"'{column_name}' column not found in the dataframe")
+        return set()
+
+    # Split the first row into a set of strings
+    common_strings = set(df.iloc[0][column_name].split())
+
+    # Intersect with sets of strings from other rows
+    for i in range(1, len(df)):
+        current_strings = set(df.iloc[i][column_name].split())
+        common_strings.intersection_update(current_strings)
+
+        # If common_strings is empty, no need to proceed further
+        if not common_strings:
+            break
+
+    return common_strings
+
 def get_data():
     folder_path = "data/raw"
 
     df = load_data_sets(folder_path)
+    # Usage example
+    common_strings = find_common_strings(df)
+    print("Common strings:", common_strings)
+
 
     df = preprocess_data(df)
 
@@ -50,8 +73,29 @@ def get_data():
     specified_class = 'valid-question'  # Example class to be isolated
     # df = convert_to_binary(df, 'label', specified_class)
 
-    df = filter_dataframe_on_size(df, 1000, 1000)
+    df = filter_dataframe_on_size(df, 300, 300)
 
+    # print all different labels
+    print(df['label'].unique())
+
+    # print the number of rows for each label
+    print(df['label'].value_counts())
+
+    # print the number of rows for each label as a percentage of the total
+    print(df['label'].value_counts(normalize=True))
+
+    # remove the rows that contain the label 'duplicate'
+    df = df[df['label'] != 'Duplicate']
+    df = df[df['label'] != 'Needs more focus']
+
+    print("POST")
+
+    print(df['label'].value_counts(normalize=True))
+
+    print(df['label'].unique())
+
+
+    # If you want to see the counts of how many times each text is duplicated
     label_encoder = LabelEncoder()
 
     y = label_encoder.fit_transform(df['label'])
@@ -71,13 +115,10 @@ def data_processor(X, y):
     X_train = data_processor.transform(X_train)
     X_test = data_processor.transform(X_test)
 
-    # Normalize the data with standard scaler
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    # return X_train, X_test, y_train, y_test
 
     # Initialize your feature selector
-    feature_selector = UnivariateFeatureSelector(k=100)  # or any other selector
+    feature_selector = UnivariateFeatureSelector(k=1000)  # or any other selector
     # feature_selector = PSOFeatureSelector(n_particles=5, n_iterations=5)
 
     # Fit the selector on the train features and labels
@@ -94,7 +135,7 @@ def train_models(X_train, X_test, y_train, y_test, models):
     model_rewards = np.zeros(n_models)
     model_instances = [model() for model in models]  # Instantiate all models
 
-    n_iterations = max(1, n_models)  # Ensure at least one iteration per model
+    n_iterations = max(10, n_models)  # Ensure at least one iteration per model
 
     for iteration in range(n_iterations):
         model_index = ucb1(iteration + 1, model_counts, model_rewards)
@@ -130,14 +171,17 @@ def plot_results(y_test, test_predictions):
 
 def main():
     X, y = get_data()
+    print("Data loaded!")
+
     X_train, X_test, y_train, y_test = data_processor(X, y)
-    
+    print("Data processed!")
+
     # Train the model
     models = [
         KerasNeuralNetworkModel,
-        # LogisticRegressionModel,
-        # RandomForestModel,
-        # GaussianNBModel
+        LogisticRegressionModel,
+        RandomForestModel,
+        GaussianNBModel
     ]
 
     best_model, average_score = train_models(X_train, X_test, y_train, y_test, models)

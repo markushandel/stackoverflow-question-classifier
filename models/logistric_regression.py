@@ -9,8 +9,8 @@ from sklearn.pipeline import make_pipeline, Pipeline
 default_logistic_param_grid = {
     'classifier__estimator__penalty': ['l2'],
     'classifier__estimator__max_iter': [5000],
-    'classifier__estimator__C': [0.1, 1, 10, 100],
-    'classifier__estimator__solver': ['lbfgs', 'sag', 'saga', 'newton-cg'],
+    # 'classifier__estimator__C': [0.1, 1, 10, 100],
+    # 'classifier__estimator__solver': ['lbfgs', 'sag', 'saga', 'newton-cg'],
 }
 
 class LogisticRegressionModel(AbstractModelTrainer):

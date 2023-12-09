@@ -101,16 +101,18 @@ def preprocess_data(df):
             'code': code,
             'tags': row['tags'],
             'has_code': int(bool(code)),
-            'user_reputation': row['owner'].get('reputation', 0) if isinstance(row['owner'], dict) else 0,
             'label': row['closed_reason'],  # Use the class label from the file name
-            'tag_amount': len(row['tags'])
+            'tag_amount': len(row['tags']),
+            'code_length': len(code),
+            'body_length': len(cleaned_body),
         }
 
-        processed_question.update(code_features)
+        # processed_question.update(code_features)
         processed_question.update(text_metrics)
 
         processed_data.append(processed_question)
 
+    print("processed data", processed_data[:5])
     # Convert the list of dictionaries to a DataFrame
     return pd.DataFrame(processed_data)
 
