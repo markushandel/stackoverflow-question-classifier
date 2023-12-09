@@ -1,99 +1,131 @@
 import json
-import os
-import re
-from sklearn.model_selection import train_test_split
+import textstat
+import nltk
+from nltk import sent_tokenize, word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 import pandas as pd
 import string
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, accuracy_score
 import numpy as np
+import re
+from collections import Counter
+nltk.download('punkt')
 
-def load_data(file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return json.load(file)
+def extract_code(text):
+    # Extracting code enclosed in <code> tags
+    code_blocks = re.findall(r'<code>(.*?)</code>', text, flags=re.DOTALL)
+    non_code_text = re.sub(r'<code>.*?</code>', '', text, flags=re.DOTALL)
 
+    # Joining all code blocks into a single string
+    combined_code = ' '.join(code_blocks)
+
+    return combined_code, non_code_text
+
+
+def analyze_text_quality(text):
+    # Calculate readability scores
+    readability = textstat.flesch_reading_ease(text)
+
+    # Sentence and word complexity
+    sentences = sent_tokenize(text)
+    words = word_tokenize(text)
+    avg_sentence_length = sum(len(sentence.split()) for sentence in sentences) / len(sentences) if sentences else 0
+    avg_word_length = sum(len(word) for word in words) / len(words) if words else 0
+    complex_words = sum(1 for word in words if textstat.syllable_count(word) > 3)
+
+    return {
+        "readability": readability,
+        "avg_sentence_length": avg_sentence_length,
+        "avg_word_length": avg_word_length,
+        "complex_words": complex_words
+    }
 
 def clean_text(text):
+    # Clean text
+    cleaned_text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
+    cleaned_text = cleaned_text.lower().translate(str.maketrans('', '', string.punctuation))
+
+    return cleaned_text
+
+
+def process_code(code):
+    # Basic metrics
+    lines = code.split('\n')
+    num_lines = len(lines)
+    empty_lines = sum(1 for line in lines if line.strip() == '')
+    comments = sum(1 for line in lines if line.strip().startswith('#') or line.strip().startswith('//'))
+
+    # Advanced metrics
+    functions = len(re.findall(r'\bdef\b|\bfunction\b', code))
+    loops = len(re.findall(r'\bfor\b|\bwhile\b', code))
+    conditionals = len(re.findall(r'\bif\b|\belse\b|\belif\b|\bswitch\b', code))
+
+    # Language-specific features (example for Python and JavaScript)
+    python_specific = len(re.findall(r'\bimport\b|\bfrom\b', code))
+    javascript_specific = len(re.findall(r'\bconsole.log\b|\bdocument.getElementById\b', code))
+
+    # Length-based metrics
+    avg_line_length = sum(len(line) for line in lines) / num_lines if num_lines > 0 else 0
+    max_line_length = max(len(line) for line in lines) if lines else 0
+
+    # Code complexity (simplified version)
+    unique_tokens = len(set(re.findall(r'\b\w+\b', code)))
+    token_frequency = Counter(re.findall(r'\b\w+\b', code))
+
+    return {
+        "num_lines": num_lines,
+        "empty_lines": empty_lines,
+        "comments": comments,
+        "functions": functions,
+        "loops": loops,
+        "conditionals": conditionals,
+        "python_specific": python_specific,
+        "javascript_specific": javascript_specific,
+        "avg_line_length": avg_line_length,
+        "max_line_length": max_line_length,
+        "unique_tokens": unique_tokens,
+        "token_frequency": token_frequency
+    }
+
+
+def preprocess_data(df):
+    processed_data = []
+    for index, row in df.iterrows():
+        code, cleaned_body = extract_code(row['body'])
+        code_features = process_code(code)
+        text_metrics = analyze_text_quality(cleaned_body)
+
+        processed_question = {
+            'title': clean_text(row['title']),
+            'body': clean_text(cleaned_body),
+            'code': code,
+            'tags': row['tags'],
+            'has_code': int(bool(code)),
+            'user_reputation': row['owner'].get('reputation', 0) if isinstance(row['owner'], dict) else 0,
+            'label': row['closed_reason'],  # Use the class label from the file name
+            'tag_amount': len(row['tags'])
+        }
+
+        processed_question.update(code_features)
+        processed_question.update(text_metrics)
+
+        processed_data.append(processed_question)
+
+    # Convert the list of dictionaries to a DataFrame
+    return pd.DataFrame(processed_data)
+
+
+def process_text(text):
     text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
     return text.lower().translate(str.maketrans('', '', string.punctuation))
 
 
-def preprocess_data(data):
-    processed_data = []
-    for question in data:
-        processed_question = {
-            'title': clean_text(question['title']),
-            'body': clean_text(question['body']),  # Change made here
-            'tags': question['tags'],
-            'user_reputation': question['owner'].get('reputation', None),
-        }
-        processed_data.append(processed_question)
-    return processed_data
-
 def vectorize_text(data, vectorizer):
     return vectorizer.fit_transform(data).toarray()
+
 
 def encode_tags(data, encoder):
     reshaped_data = data.apply(lambda x: ','.join(x)).values.reshape(-1, 1)
     encoded_data = encoder.fit_transform(reshaped_data)
     return pd.DataFrame(encoded_data.toarray(), columns=encoder.get_feature_names_out())
 
-def main():
-    folder_path = "data/raw"  # Your data folder path
-    all_data = []
-    labels = []  # To store labels
-
-    for file_name in os.listdir(folder_path):
-        class_label = file_name.split('-')[0]  # Assuming the file name starts with the class label
-        file_path = os.path.join(folder_path, file_name)
-        data = load_data(file_path)
-        preprocessed_data = preprocess_data(data)
-
-        for question in preprocessed_data:
-            question['label'] = class_label  # Assign label to each question
-
-        all_data.extend(preprocessed_data)
-        labels.extend([class_label] * len(data))  # Extend labels list
-
-    df = pd.DataFrame(all_data)
-
-    # Vectorize textual data
-    tfidf_vectorizer = TfidfVectorizer(max_features=100)  # Adjust parameters as needed
-
-    # Vectorize 'title' and 'body' separately and convert to dense arrays
-    title_vectorized = tfidf_vectorizer.fit_transform(df['title']).toarray()
-    body_vectorized = tfidf_vectorizer.fit_transform(df['body']).toarray()
-
-    # Encode tags
-    onehot_encoder = OneHotEncoder(handle_unknown='ignore')
-    encoded_tags = onehot_encoder.fit_transform(df['tags'].apply(lambda x: ','.join(x)).values.reshape(-1, 1)).toarray()
-
-    # Combine all features into one array (ensure all have the same number of rows)
-    features = np.hstack((title_vectorized, body_vectorized, encoded_tags))
-
-    print("featueres", features.shape, len(labels))
-
-    # Split dataset into train and test
-    train_features, test_features, y_train, y_test = train_test_split(features, df['label'], test_size=0.2)
-
-    # Train the model
-    model = LogisticRegression(max_iter=1000)  # Adjust parameters as needed
-    model.fit(train_features, y_train)
-
-    # Make predictions
-    train_predictions = model.predict(train_features)
-    test_predictions = model.predict(test_features)
-
-    # Calculate and print metrics
-    print("Train Metrics:")
-    print(classification_report(y_train, train_predictions))
-    print("Accuracy:", accuracy_score(y_train, train_predictions))
-
-    print("\nTest Metrics:")
-    print(classification_report(y_test, test_predictions))
-    print("Accuracy:", accuracy_score(y_test, test_predictions))
-
-if __name__ == "__main__":
-    main()

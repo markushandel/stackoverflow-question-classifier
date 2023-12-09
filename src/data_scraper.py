@@ -25,17 +25,16 @@ def fetch_questions(page, closed, pagesize=100):
     }
     response = requests.get(url, params=params)
     response.raise_for_status()
-    print("PAGE FETCHED", page, response.json()["has_more"])
     return response.json()["items"], response.json()["has_more"]
 
 
-def filter_questions_by_reason(questions, reasons, questions_per_reason, limit_per_reason):
+def filter_questions_by_reason(questions, reasons, questions_per_reason):
     """Filters questions by the specified close reasons."""
     for question in questions:
         close_reason = question.get('closed_reason', '').lower()
         for reason in reasons:
-            if close_reason == reason.lower() and len(questions_per_reason[reason]) < limit_per_reason:
-                questions_per_reason[reason].append(question)
+            if close_reason == reason.lower():
+                questions_per_reason["all-data"].append(question)
 
 
 def save_questions_to_file(reason, questions):
@@ -45,26 +44,30 @@ def save_questions_to_file(reason, questions):
         json.dump(questions, file, ensure_ascii=False, indent=4)
 
 
-def fetch_questions_for_reasons(reasons, limit_per_reason=300):
+def fetch_questions_for_reasons(reasons, limit_per_reason=1000):
     """Main function to fetch, filter, and save questions for each close reason."""
     questions_per_reason = {reason: [] for reason in reasons}
     page = 1
 
-    while any(len(questions) < limit_per_reason for questions in questions_per_reason.values()):
+    while True:
         questions, has_more = fetch_questions(page, True)
-        filter_questions_by_reason(questions, reasons, questions_per_reason, limit_per_reason)
+        filter_questions_by_reason(questions, reasons, questions_per_reason)
         for reason, questions in questions_per_reason.items():
-            print("Reason: ", reason, "Question: ", len(questions))
 
         if not has_more:
             break
         page += 1
 
+        min_len = min([len(questions) for questions in questions_per_reason.values()])
+        if min_len >= limit_per_reason:
+            break
+    for reason, questions in questions_per_reason.items():
+        print(reason, len(questions))
     for reason, questions in questions_per_reason.items():
         save_questions_to_file(reason, questions)
 
 
-def fetch_valid_questions(limit=300):
+def fetch_valid_questions(limit=3200):
     page = 100
     all_questions = []
     while len(all_questions) < limit:
@@ -80,7 +83,12 @@ def fetch_valid_questions(limit=300):
 
 
 def main():
-    reasons = ["Needs details or clarity", "Needs more focus", "Opinion-based"]
+    reasons = [
+        "needs details or clarity",
+        "needs more focus",
+        "not suitable for this site",
+        "opinion-based",
+    ]
     fetch_questions_for_reasons(reasons)
     # fetch_valid_questions()
 
