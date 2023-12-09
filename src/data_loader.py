@@ -22,4 +22,6 @@ def load_data_sets(folder_path):
     if label_column not in df.columns or df[label_column].isnull().any():
         df[label_column] = df[label_column].fillna('valid-question')
     
+    # shuffle the data
+    df = df.sample(frac=1).reset_index(drop=True)
     return df

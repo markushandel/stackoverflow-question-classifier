@@ -24,7 +24,7 @@ nltk.download('punkt')
 def clean_text(text):
     # Remove HTML tags
     cleaned_text = re.sub(r'<.*?>', '', text)
-    
+
     # Convert text to lowercase
     cleaned_text = cleaned_text.lower()
 
@@ -44,6 +44,8 @@ def clean_text(text):
 
     # Join the cleaned tokens back into a string
     cleaned_text = ' '.join(lemmatized_tokens)
+
+    return cleaned_text
 
     return cleaned_text
 

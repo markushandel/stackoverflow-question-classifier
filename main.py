@@ -21,6 +21,9 @@ from feature_selectors import UnivariateFeatureSelector, PSOFeatureSelector
 from text_processors import TfidfProcessor, BowDataProcessor, Word2VecDataProcessor, BertDataProcessor
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
+from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
+from text_processors import preprocess_text
 
 def convert_to_binary(df, label_column, specified_class):
     """
@@ -39,33 +42,10 @@ def convert_to_binary(df, label_column, specified_class):
 
     return df
 
-def find_common_strings(df, column_name='body'):
-    if column_name not in df.columns:
-        print(f"'{column_name}' column not found in the dataframe")
-        return set()
-
-    # Split the first row into a set of strings
-    common_strings = set(df.iloc[0][column_name].split())
-
-    # Intersect with sets of strings from other rows
-    for i in range(1, len(df)):
-        current_strings = set(df.iloc[i][column_name].split())
-        common_strings.intersection_update(current_strings)
-
-        # If common_strings is empty, no need to proceed further
-        if not common_strings:
-            break
-
-    return common_strings
-
 def get_data():
     folder_path = "data/raw"
 
     df = load_data_sets(folder_path)
-    # Usage example
-    common_strings = find_common_strings(df)
-    print("Common strings:", common_strings)
-
 
     df = preprocess_data(df)
 
@@ -74,7 +54,7 @@ def get_data():
     specified_class = 'valid-question'  # Example class to be isolated
     # df = convert_to_binary(df, 'label', specified_class)
 
-    df = filter_dataframe_on_size(df, 300, 300)
+    df = filter_dataframe_on_size(df, 340, 340)
 
     # print all different labels
     print(df['label'].unique())
@@ -88,6 +68,8 @@ def get_data():
     # remove the rows that contain the label 'duplicate'
     df = df[df['label'] != 'Duplicate']
     df = df[df['label'] != 'Needs more focus']
+    df = df[df['label'] != 'Needs details or clarity']
+    df = df[df['label'] != 'valid-question']
 
     print("POST")
 
@@ -101,10 +83,13 @@ def get_data():
 
 
     y = label_encoder.fit_transform(df['label'])
+
+
     X = df.drop('label', axis=1)
-    return X, y
+    return X, y, df['label'].unique()
 
 def data_processor(X, y):
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     # data_processor = TfidfProcessor()
@@ -139,8 +124,8 @@ def data_processor(X, y):
     # return X_train, X_test, y_train, y_test
 
     # Initialize your feature selector
-    feature_selector = UnivariateFeatureSelector(k=1000)  # or any other selector
-    # feature_selector = PSOFeatureSelector(n_particles=5, n_iterations=5)
+    # feature_selector = UnivariateFeatureSelector(k=1000)  # or any other selector
+    feature_selector = PSOFeatureSelector(n_particles=5, n_iterations=5)
 
     # Fit the selector on the train features and labels
     feature_selector.fit(X_train, y_train)
@@ -150,7 +135,7 @@ def data_processor(X, y):
     X_test_selected = feature_selector.transform(X_test)
     return X_train_selected, X_test_selected, y_train, y_test
 
-def train_models(X_train, X_test, y_train, y_test, models):
+def train_models(X_train, X_test, y_train, y_test, models, labels):
     n_models = len(models)
     model_counts = np.zeros(n_models)
     model_rewards = np.zeros(n_models)
@@ -164,12 +149,18 @@ def train_models(X_train, X_test, y_train, y_test, models):
 
         model.train(X_train, y_train)
         test_predictions = model.predict(X_test)
+        # Calculate accuracy
         accuracy = accuracy_score(y_test, test_predictions)
+
+        # Calculate F1 score for each class
+        f1_scores_per_class = f1_score(y_test, test_predictions, average=None)
 
         model_counts[model_index] += 1
         model_rewards[model_index] += accuracy
 
-        print(f"Iteration {iteration + 1}, Model {model_index}, Accuracy: {accuracy}")
+        # Print F1 score for each class
+        f1_scores_str = ", ".join([f"Class {label}: {score:.2f}" for label, score in zip(labels, f1_scores_per_class)])
+        print(f"Iteration {iteration + 1}, Model {model_index}, Accuracy: {accuracy}, F1 Scores: {f1_scores_str}")
 
     top_model_index = np.argmax(model_rewards / model_counts)
     best_model = model_instances[top_model_index]
@@ -191,11 +182,13 @@ def plot_results(y_test, test_predictions):
     print("-" * 50)
 
 def main():
-    X, y = get_data()
+    X, y, labels = get_data()
     print("Data loaded!")
 
     X_train, X_test, y_train, y_test = data_processor(X, y)
     print("Data processed!")
+
+    print("Y EX", y)
 
     # Train the model
     models = [
@@ -205,7 +198,7 @@ def main():
         GaussianNBModel
     ]
 
-    best_model, average_score = train_models(X_train, X_test, y_train, y_test, models)
+    best_model, average_score = train_models(X_train, X_test, y_train, y_test, models, labels)
     
     print(f"Best model: {best_model.__class__.__name__} with average accuracy: {average_score}")
     best_model.train(X_train, y_train)
