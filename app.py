@@ -1,47 +1,55 @@
 import streamlit as st
-
-# Assuming you have a function to predict the class based on text and label
-# Import your model and prediction function here
-
-labels_set = set()  # Set to store unique labels
-
-import streamlit as st
 import joblib
+import pandas as pd
+from src.data_pre_processing import preprocess_data
+
 
 # Load the trained model (using Streamlit's cache mechanism)
-@st.cache(allow_output_mutation=True)
-def load_model():
-    model = joblib.load('model_filename.joblib')
-    return model
+def load_data():
+    model = joblib.load('model.joblib')
+    selector = joblib.load('feature_selector.joblib')
+    processor = joblib.load('preprocessor.joblib')
+    return model, selector, processor
 
-model = load_model()
+model, selector, processor = load_data()
 
+label_list = [
+    'valid-question',
+    'Duplicate',       
+    'Needs more focus',              
+    'Not suitable for this site',    
+    'Needs details or clarity',      
+    'Opinion-based'                 
+]
 
 def main():
-    st.title("Custom Label Text Classification")
+    st.title("StackOverflow Question Classifier")
 
-    # Text input
-    text = st.text_area("Enter your text here:")
+    # Labels input (assuming multiple labels can be entered)
+    labels_input = st.text_input("Enter labels (comma-separated):")
+    labels = [label.strip() for label in labels_input.split(',')] if labels_input else []
 
-    # Label input
-    label = st.text_input("Enter your label:")
+    # Title input
+    title = st.text_input("Enter the title of your StackOverflow question:")
 
-    # Display a warning if there are already 5 unique labels
-    if len(labels_set) >= 5 and label not in labels_set:
-        st.warning("Only 5 unique labels are allowed. Please enter one of the existing labels.")
-    else:
-        labels_set.add(label)
+    # Title input
+    body = st.text_input("Enter the body of your StackOverflow question:")
+
 
     # Submit button
-    if st.button("Submit"):
-        # Check if the text and label are not empty
-        if text and label:
-            # Call your model's prediction function here
-            # For example: predicted_class = model.predict(text, label)
-            predicted_class = "predicted_class"  # Placeholder for model prediction
-            st.write(f"The predicted class for the entered text is: {predicted_class}")
+    if st.button("Classify"):
+        # Check if the title and labels are not empty
+        if title and labels and body:
+            # Pre-process the input
+            df = preprocess_data(pd.DataFrame([{"title": title, "body": body, "tags": labels, 'closed_reason': 'valid-question'}]))
+            df = processor.transform(df)
+            df = selector.transform(df)
+            predicted_class = model.predict(df)
+
+            # Display the prediction
+            st.write(f"The predicted class for the entered question is: {label_list[predicted_class[0]]}")
         else:
-            st.error("Please enter both text and a label.")
+            st.error("Please enter both a title and labels.")
 
 if __name__ == "__main__":
     main()

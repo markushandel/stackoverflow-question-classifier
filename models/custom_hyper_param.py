@@ -17,15 +17,7 @@ class CustomRandomizedSearchCV:
         self.random_state = random_state
         self.grid_search = None
 
-    def sample_params(self):
-        # Randomly sample a number of parameters
-        return list(ParameterSampler(self.param_distributions, n_iter=self.n_iter, random_state=self.random_state))
-
     def refine_params(self, best_params):
-        # Create a grid around the best random search parameters
-        # Assuming parameters are numeric, you could define a grid manually
-        # or by using a rule to define the range and step for each parameter.
-        # Here, we're assuming a simple case where we just take a step around the best value.
         param_grid = {}
         for param, value in best_params.items():
             if isinstance(value, int):
@@ -59,5 +51,3 @@ class CustomRandomizedSearchCV:
         self.best_score_ = self.grid_search.best_score_
         self.best_params_ = self.grid_search.best_params_
 
-    def predict(self, X):
-        return self.best_estimator_.predict(X)

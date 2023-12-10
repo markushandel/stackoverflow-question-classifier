@@ -6,7 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from .base_selector import AbstractFeatureSelector
 
 class PSOFeatureSelector(AbstractFeatureSelector):
-    def __init__(self, n_particles, n_iterations, classifier=RandomForestClassifier(), inertia_weight=0.5, cognitive_weight=1, social_weight=1):
+    def __init__(self, n_particles, n_iterations, classifier=RandomForestClassifier(), inertia_weight=0.6, cognitive_weight=1, social_weight=1):
         super().__init__()
         self.n_particles = n_particles
         self.n_iterations = n_iterations
@@ -25,6 +25,9 @@ class PSOFeatureSelector(AbstractFeatureSelector):
         local_best_scores = np.array([float('-inf')] * self.n_particles)
 
         for j in range(self.n_iterations):
+
+            self.inertia_weight = max(0.4, self.inertia_weight - 0.01)
+
             for i in range(self.n_particles):
                 # Convert boolean array to indices
                 selected_features = np.where(particle_positions[i])[0]

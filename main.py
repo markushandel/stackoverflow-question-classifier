@@ -13,6 +13,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import matplotlib.pyplot as plt
 from models.gaussian_nb import GaussianNBModel
+from models.svm import SVMModel
 from models.logistric_regression import LogisticRegressionModel
 from models.random_forest import RandomForestModel
 from models.neural_network import KerasNeuralNetworkModel
@@ -24,6 +25,7 @@ from sklearn.feature_selection import VarianceThreshold
 from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from text_processors import preprocess_text
+import joblib
 
 def convert_to_binary(df, label_column, specified_class):
     """
@@ -51,7 +53,7 @@ def get_data():
 
     df = df.sample(frac=1).reset_index(drop=True)
 
-    specified_class = 'valid-question'  # Example class to be isolated
+    # specified_class = 'Needs more focus'  # Example class to be isolated
     # df = convert_to_binary(df, 'label', specified_class)
 
     df = filter_dataframe_on_size(df, 340, 340)
@@ -66,12 +68,10 @@ def get_data():
     print(df['label'].value_counts(normalize=True))
 
     # remove the rows that contain the label 'duplicate'
-    df = df[df['label'] != 'Duplicate']
-    df = df[df['label'] != 'Needs more focus']
-    df = df[df['label'] != 'Needs details or clarity']
-    df = df[df['label'] != 'valid-question']
-
-    print("POST")
+    # df = df[df['label'] != 'Duplicate']
+    # df = df[df['label'] != 'Needs more focus']
+    # df = df[df['label'] != 'Needs details or clarity']
+    # df = df[df['label'] != 'valid-question']
 
     print(df['label'].value_counts(normalize=True))
 
@@ -98,7 +98,6 @@ def data_processor(X, y):
     # data_processor = BertDataProcessor()
 
     print("Fitting data processor...")
-    print(X_train.shape)
     
     data_processor.fit(X_train)
     X_train = data_processor.transform(X_train)
@@ -107,25 +106,9 @@ def data_processor(X, y):
     # Create a VarianceThreshold selector with a threshold of 0 (to find constant features)
     numeric_df = pd.DataFrame(X_train).select_dtypes(include=[np.number])
 
-    selector = VarianceThreshold(threshold=0)
-
-    # Fit the selector to your data
-    selector.fit(numeric_df)
-
-    # Get the indices of constant features
-    constant_features_indices = [i for i, var in enumerate(selector.variances_) if var == 0]
-
-    # Get the names of constant features
-    constant_features_names = [numeric_df.columns[i] for i in constant_features_indices]
-
-    # Print constant feature names
-    print("Constant numeric features:")
-    print(constant_features_names)
-    # return X_train, X_test, y_train, y_test
-
     # Initialize your feature selector
-    # feature_selector = UnivariateFeatureSelector(k=1000)  # or any other selector
-    feature_selector = PSOFeatureSelector(n_particles=5, n_iterations=5)
+    feature_selector = UnivariateFeatureSelector(k=1000)  # or any other selector
+    # feature_selector = PSOFeatureSelector(n_particles=10, n_iterations=40)
 
     # Fit the selector on the train features and labels
     feature_selector.fit(X_train, y_train)
@@ -133,7 +116,9 @@ def data_processor(X, y):
     # Transform the test data (do not fit the selector again)
     X_train_selected = feature_selector.transform(X_train)
     X_test_selected = feature_selector.transform(X_test)
-    return X_train_selected, X_test_selected, y_train, y_test
+    return X_train_selected, X_test_selected, y_train, y_test, data_processor, feature_selector
+
+
 
 def train_models(X_train, X_test, y_train, y_test, models, labels):
     n_models = len(models)
@@ -185,7 +170,7 @@ def main():
     X, y, labels = get_data()
     print("Data loaded!")
 
-    X_train, X_test, y_train, y_test = data_processor(X, y)
+    X_train, X_test, y_train, y_test, dp, feature_selector = data_processor(X, y)
     print("Data processed!")
 
     print("Y EX", y)
@@ -195,7 +180,8 @@ def main():
         KerasNeuralNetworkModel,
         LogisticRegressionModel,
         RandomForestModel,
-        GaussianNBModel
+        GaussianNBModel,
+        SVMModel
     ]
 
     best_model, average_score = train_models(X_train, X_test, y_train, y_test, models, labels)
@@ -204,6 +190,10 @@ def main():
     best_model.train(X_train, y_train)
     y_pred = best_model.predict(X_test)
     plot_results(y_test, y_pred)
+
+    joblib.dump(best_model, 'model.joblib')
+    joblib.dump(dp, 'preprocessor.joblib')
+    joblib.dump(feature_selector, 'feature_selector.joblib')  # Save only if used
 
 
 if __name__ == "__main__":

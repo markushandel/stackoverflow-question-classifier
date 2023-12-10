@@ -17,7 +17,7 @@ class AbstractModelTrainer(ABC):
         # custom_search = CustomRandomizedSearchCV(
         #     model=self.model,
         #     param_distributions=self.param_grid,
-        #     cv=5,                           # Number of cross-validation folds
+        #     cv=10,                           # Number of cross-validation folds
         #     scoring='f1_macro',             # Scoring metric
         #     n_iter=10,                      # Number of iterations for random search
         #     n_jobs=-1,                      # Use all cores
@@ -30,7 +30,8 @@ class AbstractModelTrainer(ABC):
         self.model = custom_search.best_estimator_
 
     def train(self, x, y):
-        self.optimize_hyperparameters(x, y)
+        # self.optimize_hyperparameters(x, y)
+        self.model.fit(x, y)
 
     def predict(self, x):
         y_pred = self.model.predict(x)
